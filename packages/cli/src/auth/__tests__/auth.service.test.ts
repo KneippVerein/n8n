@@ -248,7 +248,7 @@ describe('AuthService', () => {
 			queryBuilderMock.set.mockClear();
 			queryBuilderMock.where.mockClear();
 			queryBuilderMock.execute.mockClear();
-			jest.advanceTimersByTime(3 * Time.minutes.toMilliseconds);
+			jest.advanceTimersByTime(2 * Time.hours.toMilliseconds);
 
 			// Call middleware again now that the user is in cache with a stale last active time
 			await authService.authMiddleware(req, res, next);
@@ -256,7 +256,7 @@ describe('AuthService', () => {
 
 			expect(queryBuilderMock.update).toHaveBeenCalled();
 			expect(queryBuilderMock.set).toHaveBeenCalledWith({
-				lastActiveAt: new Date(now.getTime() + 3 * Time.minutes.toMilliseconds),
+				lastActiveAt: new Date(now.getTime() + 2 * Time.hours.toMilliseconds),
 			});
 			expect(queryBuilderMock.where).toHaveBeenCalledWith('id = :id', { id: user.id });
 			expect(queryBuilderMock.execute).toHaveBeenCalled();
