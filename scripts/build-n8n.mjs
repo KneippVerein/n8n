@@ -1,4 +1,12 @@
 #!/usr/bin/env node
+/**
+ * This script is used to build the n8n application for production.
+ * It will:
+ * 1. Clean the previous build output
+ * 2. Run pnpm install and build
+ * 3. Prepare for deployment - clean package.json files
+ * 4. Create a pruned production deployment in 'compiled'
+ */
 
 import { $, echo, fs, chalk, spinner } from 'zx';
 import path from 'path';
@@ -81,16 +89,19 @@ echo(chalk.yellow('INFO: Performing pre-deploy cleanup on package.json files...'
 
 // Find and backup package.json files
 const packageJsonFiles = await $`cd ${config.rootDir} && find . -name "package.json" \
-  -not -path "./node_modules/*" \
-  -not -path "*/node_modules/*" \
-  -not -path "./compiled/*" \
-  -type f`.lines();
+-not -path "./node_modules/*" \
+-not -path "*/node_modules/*" \
+-not -path "./compiled/*" \
+-type f`.lines();
 
 // Backup all package.json files
-for (const file of packageJsonFiles) {
-	if (file) {
-		const fullPath = path.join(config.rootDir, file);
-		await fs.copy(fullPath, `${fullPath}.bak`);
+// This is only needed locally, not in CI
+if (process.env.CI !== 'true') {
+	for (const file of packageJsonFiles) {
+		if (file) {
+			const fullPath = path.join(config.rootDir, file);
+			await fs.copy(fullPath, `${fullPath}.bak`);
+		}
 	}
 }
 // Run FE trim script
@@ -134,17 +145,20 @@ startTimer('package_deploy');
 
 await fs.ensureDir(config.compiledAppDir);
 
-await $`cd ${config.rootDir} && NODE_ENV=production DOCKER_BUILD=true pnpm --filter=n8n --prod --legacy deploy ./compiled`;
+await $`cd ${config.rootDir} && NODE_ENV=production DOCKER_BUILD=true pnpm --filter=n8n --prod --legacy deploy --no-optional ./compiled`;
 
 const packageDeployTime = getElapsedTime('package_deploy');
 
 // Restore package.json files
-for (const file of packageJsonFiles) {
-	if (file) {
-		const fullPath = path.join(config.rootDir, file);
-		const backupPath = `${fullPath}.bak`;
-		if (await fs.pathExists(backupPath)) {
-			await fs.move(backupPath, fullPath, { overwrite: true });
+// This is only needed locally, not in CI
+if (process.env.CI !== 'true') {
+	for (const file of packageJsonFiles) {
+		if (file) {
+			const fullPath = path.join(config.rootDir, file);
+			const backupPath = `${fullPath}.bak`;
+			if (await fs.pathExists(backupPath)) {
+				await fs.move(backupPath, fullPath, { overwrite: true });
+			}
 		}
 	}
 }

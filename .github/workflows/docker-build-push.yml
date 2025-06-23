@@ -47,23 +47,50 @@ on:
       - '.github/workflows/docker-build-push.yml'
       - 'docker/images/n8n/Dockerfile'
 
+  push:
+    branches:
+      - docker-building-redesign
+
 jobs:
   build-and-push-docker:
+    strategy:
+      matrix:
+        platform: [amd64, arm64]
+        include:
+          - platform: amd64
+            runner: blacksmith-4vcpu-ubuntu-2204
+            docker_platform: linux/amd64
+          - platform: arm64
+            runner: blacksmith-4vcpu-ubuntu-2204-arm
+            docker_platform: linux/arm64
+
     name: Build App, then Build and Push Docker Image
-    runs-on: blacksmith-4vcpu-ubuntu-2204
-    timeout-minutes: 15
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
     outputs:
       image_ref: ${{ steps.determine-tags.outputs.primary_tag }}
-
     steps:
       - name: Checkout code
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           fetch-depth: 0
 
-      - name: Setup Environment and Build Project
-        uses: ./.github/actions/setup-and-build
-        id: app_build
+      - name: Setup pnpm
+        uses: pnpm/action-setup@a7487c7e89a18df4991f7f222e4898a00d66ddda # v4.1.0
+        with:
+          run_install: false
+
+      - name: Setup Node.js
+        uses: useblacksmith/setup-node@v5
+        with:
+          node-version: 22.x
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        shell: bash
+
+      - name: Configure Turborepo Cache
+        uses: useblacksmith/caching-for-turbo@v1
 
       - name: Build n8n for Docker
         run: pnpm build:n8n
@@ -147,9 +174,6 @@ jobs:
           echo "EOF" >> $GITHUB_OUTPUT
           echo "primary_tag=$PRIMARY_TAG" >> $GITHUB_OUTPUT
 
-      - name: Set up QEMU
-        uses: docker/setup-qemu-action@29109295f81e9208d7d86ff1c6c12d2833863392 # v3.6.0
-
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@b5ca514318bd6ebac0fb2aedd5d36ec1b5c232a2 # v3.10.0
 
@@ -174,12 +198,10 @@ jobs:
           context: .
           file: ./docker/images/n8n/Dockerfile
           build-args: |
-            NODE_VERSION=20
+            NODE_VERSION=22
             N8N_VERSION=${{ steps.context.outputs.n8n_version }}
             N8N_RELEASE_TYPE=${{ steps.context.outputs.release_type }}
-            LAUNCHER_VERSION=1.1.2
-            BUILDER_PLATFORM_ARG=linux/amd64
-          platforms: linux/amd64,linux/arm64
+          platforms: ${{ matrix.platform }}
           provenance: false
           push: ${{ steps.context.outputs.push_enabled }}
           tags: ${{ steps.determine-tags.outputs.tags }}

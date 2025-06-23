@@ -1,4 +1,10 @@
 #!/usr/bin/env node
+/**
+ * This script is used to build the n8n docker image locally.
+ * It simulates how we build for CI and should allow for local testing.
+ * By default it outputs the tag 'dev' and the image name 'n8n-local:dev'.
+ * It can be overridden by setting the IMAGE_BASE_NAME and IMAGE_TAG environment variables.
+ */
 
 import { $, echo, fs, chalk } from 'zx';
 import path from 'path';
@@ -23,17 +29,9 @@ const config = {
 
 config.fullImageName = `${config.imageBaseName}:${config.imageTag}`;
 
-// --- Platform Detection ---
-const localArch = (await $`uname -m`).stdout.trim();
-const isArm = localArch === 'arm64' || localArch === 'aarch64';
-const defaultPlatform = isArm ? 'linux/arm64' : 'linux/amd64';
-const targetPlatform = process.env.OVERRIDE_TARGET_PLATFORM || defaultPlatform;
-const builderPlatform = process.env.OVERRIDE_BUILDER_PLATFORM || defaultPlatform;
-
 // --- Check Prerequisites ---
 echo(chalk.blue.bold('===== Docker Build for n8n ====='));
 echo(`INFO: Image: ${config.fullImageName}`);
-echo(`INFO: Platform: ${targetPlatform}`);
 echo(chalk.gray('-----------------------------------------------'));
 
 // Check if compiled directory exists
@@ -57,8 +55,6 @@ echo(chalk.yellow('INFO: Building Docker image...'));
 
 try {
 	const buildOutput = await $`docker build \
-		--build-arg TARGETPLATFORM=${targetPlatform} \
-		--build-arg BUILDER_PLATFORM_ARG=${builderPlatform} \
 		-t ${config.fullImageName} \
 		-f ${config.dockerfilePath} \
 		${config.buildContext}`;
@@ -85,7 +81,6 @@ echo('');
 echo(chalk.green.bold('================ DOCKER BUILD COMPLETE ================'));
 echo(chalk.green(`✅ Image built: ${config.fullImageName}`));
 echo(`   Size: ${imageSize}`);
-echo(`   Platform: ${targetPlatform}`);
 echo(`   Build time: ${buildTime}s`);
 echo(chalk.green.bold('===================================================='));
 

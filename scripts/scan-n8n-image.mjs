@@ -1,4 +1,8 @@
 #!/usr/bin/env node
+/**
+ * This script is used to scan the n8n docker image for vulnerabilities.
+ * It uses Trivy to scan the image.
+ */
 
 import { $, echo, fs, chalk } from 'zx';
 import path from 'path';
@@ -27,7 +31,6 @@ const config = {
 
 config.fullImageName = `${config.imageBaseName}:${config.imageTag}`;
 
-// --- Helper Functions ---
 const printHeader = (title) =>
 	!config.quiet && echo(`\n${chalk.blue.bold(`===== ${title} =====`)}`);
 

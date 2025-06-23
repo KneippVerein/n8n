@@ -3,54 +3,22 @@ ARG N8N_VERSION=snapshot
 ARG LAUNCHER_VERSION=1.1.3
 ARG TARGETPLATFORM
 
-
 # ==============================================================================
 # STAGE 1: System Dependencies & Base Setup
-# Provides the runtime environment base.
 # ==============================================================================
-FROM node:${NODE_VERSION}-alpine AS system-deps
-
-# Install system dependencies
-RUN apk add --no-cache --virtual .build-deps-fonts \
-        msttcorefonts-installer \
-        fontconfig \
-    && apk add --no-cache \
-        git \
-        openssh \
-        graphicsmagick \
-        tini \
-        tzdata \
-        ca-certificates \
-        libc6-compat \
-        wget \
-    && update-ms-fonts \
-    && fc-cache -f \
-    && apk del .build-deps-fonts \
-    && find /usr/share/fonts/truetype/msttcorefonts/ -type l -exec unlink {} \; \
-    && rm -rf /var/cache/apk/* /tmp/*
-
-# Setup Node.js environment (global npm update)
-COPY .npmrc /usr/local/etc/npmrc
-RUN npm install -g \
-        corepack@0.31 \
-        full-icu@1.5.0 \
-    && corepack enable pnpm \
-    && rm -rf /root/.npm /root/.cache
+FROM n8nio/base:${NODE_VERSION} AS system-deps
 
 # ==============================================================================
 # STAGE 2: Application Artifact Processor
-# A clean intermediate stage to hold pre-built application artifacts from the build context.
 # ==============================================================================
-FROM system-deps AS app-artifact-processor
+FROM alpine:3.22.0 AS app-artifact-processor
 
 COPY ./compiled /app/
 
 # ==============================================================================
-# STAGE 3: Task Runner Launcher (Multi-platform)
-# This stage specifically prepares the launcher.
-
+# STAGE 3: Task Runner Launcher
 # ==============================================================================
-FROM system-deps AS launcher-downloader
+FROM alpine:3.22.0 AS launcher-downloader
 ARG TARGETPLATFORM
 ARG LAUNCHER_VERSION
 
@@ -71,7 +39,6 @@ RUN set -e; \
 
 # ==============================================================================
 # STAGE 4: Final Runtime Image
-# Assembles the final image.
 # ==============================================================================
 FROM system-deps AS runtime
 
@@ -82,12 +49,6 @@ ENV N8N_RELEASE_TYPE=${N8N_RELEASE_TYPE}
 ENV NODE_ICU_DATA=/usr/local/lib/node_modules/full-icu
 ENV SHELL=/bin/sh
 
-LABEL org.opencontainers.image.title="n8n" \
-      org.opencontainers.image.description="Workflow Automation Tool" \
-      org.opencontainers.image.source="https://github.com/n8n-io/n8n" \
-      org.opencontainers.image.url="https://n8n.io" \
-      org.opencontainers.image.version=${N8N_VERSION}
-
 WORKDIR /home/node
 
 COPY --from=app-artifact-processor /app /usr/local/lib/node_modules/n8n
@@ -95,13 +56,16 @@ COPY --from=launcher-downloader /launcher-bin/* /usr/local/bin/
 COPY docker/images/n8n/docker-entrypoint.sh /
 COPY docker/images/n8n/n8n-task-runners.json /etc/n8n-task-runners.json
 
-RUN cd /usr/local/lib/node_modules/n8n && \
-    npm rebuild sqlite3 && \
-    ln -s /usr/local/lib/node_modules/n8n/bin/n8n /usr/local/bin/n8n && \
+RUN ln -s /usr/local/lib/node_modules/n8n/bin/n8n /usr/local/bin/n8n && \
     mkdir -p /home/node/.n8n && \
-    chown -R node:node /home/node && \
-    rm -rf /var/cache/apk/* /lib/apk/db/* /etc/apk/
+    chown -R node:node /home/node
 
 EXPOSE 5678/tcp
 USER node
 ENTRYPOINT ["tini", "--", "/docker-entrypoint.sh"]
+
+LABEL org.opencontainers.image.title="n8n" \
+      org.opencontainers.image.description="Workflow Automation Tool" \
+      org.opencontainers.image.source="https://github.com/n8n-io/n8n" \
+      org.opencontainers.image.url="https://n8n.io" \
+      org.opencontainers.image.version=${N8N_VERSION}
