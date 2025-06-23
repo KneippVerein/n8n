@@ -35,7 +35,7 @@ export const userListItemSchema = z.object({
 	personalizationAnswers: z.object({}).passthrough().nullable().optional(),
 	lastActive: z.string().optional(),
 	projectRelations: z.array(userProjectSchema).nullable().optional(),
-	lastActiveAt: z.date().nullable().optional(),
+	lastActiveAt: z.string().nullable().optional(),
 });
 
 export const usersListSchema = z.object({
