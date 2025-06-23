@@ -8,7 +8,8 @@ import {
 import { isValueExpression } from '@/utils/nodeTypesUtils';
 import { computed } from 'vue';
 import { useNDVStore } from '@/stores/ndv.store';
-import { AI_TRANSFORM_NODE_TYPE } from '@/constants';
+import { usePostHog } from '@/stores/posthog.store';
+import { AI_TRANSFORM_NODE_TYPE, FOCUS_PANEL_EXPERIMENT } from '@/constants';
 
 interface Props {
 	parameter: INodeProperties;
@@ -37,6 +38,8 @@ const emit = defineEmits<{
 }>();
 
 const i18n = useI18n();
+const ndvStore = useNDVStore();
+const posthogStore = usePostHog();
 
 const isDefault = computed(() => props.parameter.default === props.value);
 const isValueAnExpression = computed(() => isValueExpression(props.parameter, props.value));
@@ -64,7 +67,7 @@ const shouldShowOptions = computed(() => {
 	return false;
 });
 const selectedView = computed(() => (isValueAnExpression.value ? 'expression' : 'fixed'));
-const activeNode = computed(() => useNDVStore().activeNode);
+const activeNode = computed(() => ndvStore.activeNode);
 const hasRemoteMethod = computed(
 	() =>
 		!!props.parameter.typeOptions?.loadOptionsMethod || !!props.parameter.typeOptions?.loadOptions,
@@ -76,6 +79,17 @@ const resetValueLabel = computed(() => {
 
 	return i18n.baseText('parameterInput.resetValue');
 });
+
+const isFocusPanelExperimentEnabled = computed(() => {
+	return posthogStore.getVariant(FOCUS_PANEL_EXPERIMENT.name) === FOCUS_PANEL_EXPERIMENT.variant;
+});
+const hasFocusAction = computed(
+	() =>
+		isFocusPanelExperimentEnabled.value &&
+		!props.isReadOnly &&
+		activeNode.value &&
+		(props.parameter.type === 'string' || props.parameter.type === 'json'),
+);
 
 const actions = computed(() => {
 	if (Array.isArray(props.customActions) && props.customActions.length > 0) {
@@ -91,13 +105,19 @@ const actions = computed(() => {
 		];
 	}
 
-	const parameterActions = [
-		{
-			label: resetValueLabel.value,
-			value: 'resetValue',
-			disabled: isDefault.value,
-		},
-	];
+	const focusAction = {
+		label: i18n.baseText('parameterInput.focusParameter'),
+		value: 'focus',
+		disabled: false,
+	};
+
+	const resetAction = {
+		label: resetValueLabel.value,
+		value: 'resetValue',
+		disabled: isDefault.value,
+	};
+
+	const parameterActions = hasFocusAction.value ? [resetAction, focusAction] : [resetAction];
 
 	if (
 		hasRemoteMethod.value ||
